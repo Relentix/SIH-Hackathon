@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MUDRA — Circuit &amp; Control Simulation</title>
+<style>
+  :root{
+    --bg:#0a0f0d;
+    --panel:#101713;
+    --panel-2:#141d18;
+    --line:#223028;
+    --amber:#e8a13a;
+    --amber-dim:#8a611f;
+    --green:#5fd88a;
+    --red:#e0574a;
+    --cyan:#4fc3d9;
+    --violet:#b48be0;
+    --text:#dbe6de;
+    --text-dim:#7c9186;
+    --mono:'IBM Plex Mono','Consolas',monospace;
+    --sans:'Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 60px;}
+
+  header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;
+    border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px;}
+  header h1{font-family:var(--mono);font-size:22px;letter-spacing:.5px;margin:0;color:var(--text);font-weight:600;}
+  header h1 span{color:var(--amber);}
+  header p{font-size:13px;color:var(--text-dim);margin:4px 0 0;font-family:var(--mono);}
+
+  nav.tabs{display:flex;gap:6px;margin-bottom:22px;}
+  nav.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--text-dim);
+    padding:9px 18px;font-family:var(--mono);font-size:13px;cursor:pointer;border-radius:3px;transition:.15s;}
+  nav.tabs button:hover{color:var(--text);}
+  nav.tabs button.active{background:var(--panel-2);color:var(--amber);border-color:var(--amber-dim);}
+
+  section{display:none;}
+  section.active{display:block;}
+
+  .subtabs{display:flex;gap:6px;margin-bottom:14px;}
+  .subtabs button{background:none;border:1px solid var(--line);color:var(--text-dim);padding:6px 14px;
+    font-family:var(--mono);font-size:12px;cursor:pointer;border-radius:3px;}
+  .subtabs button.active{color:var(--cyan);border-color:var(--cyan);}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;}
+  .diagram-frame{background:#070b09;border:1px solid var(--line);border-radius:6px;overflow:auto;}
+  svg text{font-family:var(--mono);}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend i{width:16px;height:3px;display:inline-block;border-radius:2px;}
+
+  .pinnote{margin-top:14px;font-size:12.5px;color:var(--text-dim);line-height:1.6;font-family:var(--mono);}
+  .pinnote b{color:var(--text);}
+
+  /* ---------------- SIMULATION LAYOUT ---------------- */
+  .simgrid{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start;}
+  @media (max-width:820px){.simgrid{grid-template-columns:1fr;}}
+
+  .panel-title{font-family:var(--mono);font-size:12px;letter-spacing:.5px;color:var(--amber);
+    margin:0 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+
+  /* joystick */
+  .joybase{width:180px;height:180px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#1b2620,#0c1310);
+    border:1px solid var(--line);margin:0 auto 10px;position:relative;touch-action:none;}
+  .joystick{width:62px;height:62px;border-radius:50%;background:linear-gradient(160deg,#e8a13a,#8a611f);
+    position:absolute;left:59px;top:59px;box-shadow:0 3px 8px rgba(0,0,0,.5);cursor:grab;}
+  .joyreadout{text-align:center;font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:18px;}
+
+  .btnrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;}
+  .ctlbtn{background:var(--panel-2);border:1px solid var(--line);color:var(--text);font-family:var(--mono);
+    font-size:12px;padding:12px 4px;border-radius:4px;cursor:pointer;user-select:none;text-align:center;}
+  .ctlbtn.active{background:var(--amber-dim);color:#1a1408;border-color:var(--amber);}
+  .modebtn{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    font-family:var(--mono);font-size:12px;padding:10px;border-radius:4px;cursor:pointer;margin-top:4px;}
+  .modebtn.active{color:var(--violet);border-color:var(--violet);}
+
+  .linkbtn{width:100%;margin-top:16px;background:var(--panel-2);border:1px solid var(--red);color:var(--red);
+    font-family:var(--mono);font-size:12px;padding:9px;border-radius:4px;cursor:pointer;}
+  .linkbtn.killed{background:var(--red);color:#160504;}
+
+  .status-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;
+    padding:4px 10px;border-radius:12px;border:1px solid var(--line);}
+  .dot{width:7px;height:7px;border-radius:50%;}
+
+  /* rover view */
+  .roverstage{display:flex;gap:18px;flex-wrap:wrap;}
+  .roverview{flex:1;min-width:220px;background:#070b09;border:1px solid var(--line);border-radius:6px;
+    height:220px;position:relative;overflow:hidden;}
+  .chassis{position:absolute;left:50%;top:50%;width:70px;height:100px;margin-left:-35px;margin-top:-50px;
+    transition:transform .18s ease;}
+  .chassis .body{width:70px;height:100px;background:linear-gradient(180deg,#243b2f,#141d18);border:1px solid #35493c;border-radius:10px;}
+  .chassis .arrow{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:20px;color:var(--green);}
+  .wheelbar{position:absolute;bottom:14px;left:14px;right:14px;display:flex;justify-content:space-between;
+    font-family:var(--mono);font-size:10px;color:var(--text-dim);}
+  .wheel{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .wheel .dir{font-size:14px;}
+  .dirlabel{position:absolute;top:10px;left:0;right:0;text-align:center;font-family:var(--mono);
+    font-size:12px;color:var(--amber);letter-spacing:1px;}
+
+  .oled{width:220px;height:auto;background:#000;border:2px solid #1a1a1a;border-radius:4px;padding:8px 10px;
+    font-family:var(--mono);font-size:10.5px;color:#7fffb0;line-height:1.65;white-space:pre;}
+
+  .sliders{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
+  .sliderbox label{display:block;font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:4px;}
+  .sliderbox input[type=range]{width:100%;}
+  .sliderbox .val{color:var(--cyan);}
+
+  .alertrow{display:flex;gap:16px;align-items:center;margin-top:16px;font-family:var(--mono);font-size:12px;}
+  .led{width:12px;height:12px;border-radius:50%;border:1px solid #000;}
+  .led.on.green{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .led.on.red{background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse 0.6s infinite alternate;}
+  .led.off{background:#1c261f;}
+  @keyframes pulse{from{opacity:1;}to{opacity:.4;}}
+  .buzzer{color:var(--text-dim);}
+  .buzzer.on{color:var(--red);}
+
+  .telemetry{margin-top:16px;}
+  .telemetry pre{height:120px;overflow-y:auto;margin:0;background:#070b09;border:1px solid var(--line);
+    border-radius:4px;padding:8px 10px;font-family:var(--mono);font-size:10.5px;color:var(--cyan);line-height:1.5;}
+
+  footer{margin-top:30px;font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>MUDRA // rover control system</h1>
+      <p>remote link · rover electronics · behaviour simulation</p>
+    </div>
+    <span class="status-badge" id="clockBadge"><span class="dot" style="background:var(--green)"></span>SIM RUNNING</span>
+  </header>
+
+  <nav class="tabs">
+    <button class="active" data-tab="diagrams">circuit diagrams</button>
+    <button data-tab="sim">live simulation</button>
+  </nav>
+
+  <!-- ================= DIAGRAMS ================= -->
+  <section class="active" id="tab-diagrams">
+    <div class="subtabs">
+      <button class="active" data-sub="remote">🎮 remote</button>
+      <button data-sub="rover">🤖 rover</button>
+    </div>
+
+    <div class="card sub-panel active" id="sub-remote">
+      <div class="diagram-frame">
+        <svg viewBox="0 0 920 560" width="100%" style="min-width:760px;display:block">
+          <!-- ESP32 center -->
+          <rect x="360" y="180" width="200" height="220" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="460" y="205" text-anchor="middle" fill="#e8a13a" font-size="13">ESP32 DevKit V1</text>
+          <text x="460" y="220" text-anchor="middle" fill="#7c9186" font-size="10">remote controller</text>
+          <line x1="380" y1="230" x2="540" y2="230" stroke="#223028"/>
+
+          <!-- pin stubs on esp32 -->
+          <g font-size="9" fill="#dbe6de">
+            <text x="370" y="252">G5</text><text x="370" y="266">G17</text><text x="370" y="280">G18</text>
+            <text x="370" y="294">G19</text><text x="370" y="308">G23</text>
+            <text x="370" y="326">G34</text><text x="370" y="340">G35</text><text x="370" y="354">G32</text>
+            <text x="540" y="252" text-anchor="end">G33</text><text x="540" y="266" text-anchor="end">G25</text>
+            <text x="540" y="280" text-anchor="end">G26</text><text x="540" y="294" text-anchor="end">G27</text>
+            <text x="540" y="308" text-anchor="end">G14</text>
+            <text x="540" y="340" text-anchor="end">3V3</text><text x="540" y="354" text-anchor="end">GND</text>
+          </g>
+
+          <!-- nRF24 module -->
+          <rect x="40" y="40" width="190" height="150" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="135" y="62" text-anchor="middle" fill="#4fc3d9" font-size="13">nRF24L01</text>
+          <text x="135" y="76" text-anchor="middle" fill="#7c9186" font-size="10">2.4GHz transceiver (VSPI)</text>
+          <g font-size="9" fill="#dbe6de">
+            <text x="52" y="100">CE</text><text x="52" y="114">CSN</text><text x="52" y="128">SCK</text>
+            <text x="52" y="142">MISO</text><text x="52" y="156">MOSI</text><text x="52" y="170">VCC / GND</text>
+          </g>
+          <!-- wires nrf -> esp32 -->
+          <path d="M230,96 C300,96 300,246 360,246" fill="none" stroke="#4fc3d9" stroke-width="1.6"/>
+          <text x="290" y="90" fill="#4fc3d9" font-size="9">CE → G5</text>
+          <path d="M230,110 C310,110 310,260 360,260" fill="none" stroke="#4fc3d9" stroke-width="1.6"/>
+          <text x="315" y="118" fill="#4fc3d9" font-size="9">CSN → G17</text>
+          <path d="M230,124 C320,124 320,274 360,274" fill="none" stroke="#4fc3d9" stroke-width="1.6"/>
+          <text x="325" y="146" fill="#4fc3d9" font-size="9">SCK → G18</text>
+          <path d="M230,138 C330,138 330,288 360,288" fill="none" stroke="#4fc3d9" stroke-width="1.6"/>
+          <text x="330" y="170" fill="#4fc3d9" font-size="9">MISO → G19</text>
+          <path d="M230,152 C340,152 340,302 360,302" fill="none" stroke="#4fc3d9" stroke-width="1.6"/>
+          <text x="335" y="196" fill="#4fc3d9" font-size="9">MOSI → G23</text>
+          <path d="M230,168 C260,168 260,340 360,340" fill="none" stroke="#e0574a" stroke-width="1.6"/>
+          <text x="238" y="230" fill="#e0574a" font-size="9">VCC → 3V3 (only!)</text>
+          <path d="M180,190 L180,470 L360,470" fill="none" stroke="#888" stroke-width="1.4" stroke-dasharray="3 3"/>
+          <text x="185" y="463" fill="#888" font-size="9">GND (common)</text>
+
+          <!-- Joystick module -->
+          <rect x="40" y="360" width="190" height="140" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="135" y="382" text-anchor="middle" fill="#e8a13a" font-size="13">Joystick module</text>
+          <g font-size="9" fill="#dbe6de">
+            <text x="52" y="408">VRx (X-axis)</text><text x="52" y="422">VRy (Y-axis)</text><text x="52" y="436">SW (press)</text>
+          </g>
+          <path d="M230,408 C290,408 290,326 360,326" fill="none" stroke="#f0c141" stroke-width="1.6"/>
+          <text x="255" y="400" fill="#f0c141" font-size="9">VRx → G34 (ADC, in-only)</text>
+          <path d="M230,422 C295,422 295,340 360,340" fill="none" stroke="#f0c141" stroke-width="1.6"/>
+          <text x="255" y="440" fill="#f0c141" font-size="9">VRy → G35 (ADC, in-only)</text>
+          <path d="M230,436 C300,436 300,354 360,354" fill="none" stroke="#5fd88a" stroke-width="1.6"/>
+          <text x="255" y="456" fill="#5fd88a" font-size="9">SW → G32</text>
+
+          <!-- Buttons module -->
+          <rect x="690" y="360" width="190" height="150" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="785" y="382" text-anchor="middle" fill="#5fd88a" font-size="13">Direction buttons</text>
+          <g font-size="9" fill="#dbe6de">
+            <text x="702" y="404">UP</text><text x="702" y="418">DOWN</text><text x="702" y="432">LEFT</text>
+            <text x="702" y="446">RIGHT</text><text x="702" y="460">MODE</text>
+          </g>
+          <path d="M690,404 C620,404 620,254 560,254" fill="none" stroke="#5fd88a" stroke-width="1.6"/>
+          <text x="600" y="398" fill="#5fd88a" font-size="9">UP → G33</text>
+          <path d="M690,418 C630,418 630,268 560,268" fill="none" stroke="#5fd88a" stroke-width="1.6"/>
+          <text x="610" y="422" fill="#5fd88a" font-size="9">DOWN → G25</text>
+          <path d="M690,432 C640,432 640,282 560,282" fill="none" stroke="#5fd88a" stroke-width="1.6"/>
+          <text x="612" y="446" fill="#5fd88a" font-size="9">LEFT → G26</text>
+          <path d="M690,446 C650,446 650,296 560,296" fill="none" stroke="#5fd88a" stroke-width="1.6"/>
+          <text x="618" y="464" fill="#5fd88a" font-size="9">RIGHT → G27</text>
+          <path d="M690,460 C660,460 660,310 560,310" fill="none" stroke="#b48be0" stroke-width="1.6"/>
+          <text x="625" y="482" fill="#b48be0" font-size="9">MODE → G14</text>
+          <text x="690,500" x="690" y="500" fill="#7c9186" font-size="9">all buttons: INPUT_PULLUP → active LOW</text>
+
+          <!-- Power -->
+          <rect x="690" y="40" width="190" height="120" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="785" y="62" text-anchor="middle" fill="#e0574a" font-size="13">Battery + regulator</text>
+          <text x="785" y="78" text-anchor="middle" fill="#7c9186" font-size="10">Li-ion / 18650 → 3.3V reg</text>
+          <path d="M690,90 C640,90 640,270 560,270" fill="none" stroke="#e0574a" stroke-width="1.6" stroke-dasharray="2 2"/>
+          <text x="600" y="150" fill="#e0574a" font-size="9">3V3 → ESP32 3V3 rail</text>
+          <path d="M780,160 L780,470 L560,470" fill="none" stroke="#888" stroke-width="1.4" stroke-dasharray="3 3"/>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:#4fc3d9"></i>SPI (nRF24)</span>
+        <span><i style="background:#5fd88a"></i>digital input (buttons)</span>
+        <span><i style="background:#f0c141"></i>analog input (joystick)</span>
+        <span><i style="background:#b48be0"></i>mode select</span>
+        <span><i style="background:#e0574a"></i>power / 3.3V</span>
+        <span><i style="background:#888"></i>ground</span>
+      </div>
+      <p class="pinnote"><b>Notes:</b> GPIO34/35 are input-only on the classic ESP32 — correct for the joystick's analog axes, since nothing is ever written to them. nRF24L01 VCC must be 3.3V, never 5V. All buttons use internal pull-ups, so pressed = LOW.</p>
+    </div>
+
+    <div class="card sub-panel" id="sub-rover" style="display:none">
+      <div class="diagram-frame">
+        <svg viewBox="0 0 1120 760" width="100%" style="min-width:900px;display:block">
+          <!-- ESP32 core -->
+          <rect x="470" y="300" width="180" height="180" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="560" y="325" text-anchor="middle" fill="#e8a13a" font-size="13">ESP32 DevKit V1</text>
+          <text x="560" y="340" text-anchor="middle" fill="#7c9186" font-size="10">rover main controller</text>
+
+          <!-- nRF24 receiver -->
+          <rect x="40" y="40" width="180" height="120" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="130" y="62" text-anchor="middle" fill="#4fc3d9" font-size="12">nRF24L01 (RX)</text>
+          <text x="52" y="86" font-size="9" fill="#dbe6de">CE → G16</text>
+          <text x="52" y="100" font-size="9" fill="#dbe6de">CSN → G17</text>
+          <text x="52" y="114" font-size="9" fill="#dbe6de">SCK/MISO/MOSI shared bus</text>
+          <path d="M220,90 C340,90 400,300 470,340" fill="none" stroke="#4fc3d9" stroke-width="1.6"/>
+
+          <!-- LoRa telemetry -->
+          <rect x="470" y="40" width="180" height="130" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="560" y="62" text-anchor="middle" fill="#b48be0" font-size="12">LoRa module</text>
+          <g font-size="9" fill="#dbe6de">
+            <text x="482" y="84">SCK → G5</text><text x="482" y="98">MISO → G13</text>
+            <text x="482" y="112">MOSI → G23</text><text x="482" y="126">CS → G32</text>
+            <text x="482" y="140">RESET → G2 · DIO0 → G33</text>
+          </g>
+          <path d="M560,170 L560,300" fill="none" stroke="#b48be0" stroke-width="1.6"/>
+
+          <!-- gas sensors -->
+          <rect x="900" y="40" width="180" height="120" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="990" y="62" text-anchor="middle" fill="#f0c141" font-size="12">Gas sensors</text>
+          <text x="912" y="86" font-size="9" fill="#dbe6de">MQ-4 (CH4) → G36 (ADC)</text>
+          <text x="912" y="100" font-size="9" fill="#dbe6de">MQ-7 (CO) → G39 (ADC)</text>
+          <path d="M900,100 C780,100 730,300 650,330" fill="none" stroke="#f0c141" stroke-width="1.6"/>
+
+          <!-- I2C bus: BME280, MPU6050, VL53L0X, OLED -->
+          <rect x="900" y="220" width="180" height="240" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="990" y="242" text-anchor="middle" fill="#5fd88a" font-size="12">I²C bus (SDA 21 / SCL 22)</text>
+          <text x="912" y="266" font-size="9" fill="#dbe6de">BME280 — temp/humidity/pressure</text>
+          <text x="912" y="284" font-size="9" fill="#dbe6de">MPU6050 — accel / gyro</text>
+          <text x="912" y="302" font-size="9" fill="#dbe6de">VL53L0X — ToF distance</text>
+          <text x="912" y="320" font-size="9" fill="#dbe6de">SSD1306 OLED — 0x3C</text>
+          <path d="M900,340 C800,340 720,360 650,370" fill="none" stroke="#5fd88a" stroke-width="1.6"/>
+
+          <!-- HC-SR04 -->
+          <rect x="900" y="500" width="180" height="100" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="990" y="522" text-anchor="middle" fill="#4fc3d9" font-size="12">HC-SR04</text>
+          <text x="912" y="546" font-size="9" fill="#dbe6de">TRIG → G18</text>
+          <text x="912" y="560" font-size="9" fill="#dbe6de">ECHO → G19</text>
+          <path d="M900,550 C800,550 720,470 650,430" fill="none" stroke="#4fc3d9" stroke-width="1.6"/>
+
+          <!-- L298N + motors -->
+          <rect x="470" y="560" width="180" height="150" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="560" y="582" text-anchor="middle" fill="#e8a13a" font-size="12">L298N driver</text>
+          <text x="482" y="604" font-size="9" fill="#dbe6de">IN1 → G25 · IN2 → G26 (left)</text>
+          <text x="482" y="618" font-size="9" fill="#dbe6de">IN3 → G27 · IN4 → G14 (right)</text>
+          <text x="482" y="638" font-size="9" fill="#7c9186">OUT1/2 → left geared motor</text>
+          <text x="482" y="652" font-size="9" fill="#7c9186">OUT3/4 → right geared motor</text>
+          <text x="482" y="672" font-size="9" fill="#e0574a">12V pack → L298N · 5V reg → logic</text>
+          <path d="M560,480 L560,560" fill="none" stroke="#e8a13a" stroke-width="1.6"/>
+
+          <!-- Buzzer + LEDs -->
+          <rect x="40" y="560" width="180" height="130" rx="6" fill="#141d18" stroke="#35493c"/>
+          <text x="130" y="582" text-anchor="middle" fill="#e0574a" font-size="12">Alerts</text>
+          <text x="52" y="604" font-size="9" fill="#dbe6de">Buzzer → G4</text>
+          <text x="52" y="618" font-size="9" fill="#dbe6de">Green LED → G1</text>
+          <text x="52" y="632" font-size="9" fill="#dbe6de">Red LED → G3</text>
+          <text x="52" y="650" font-size="9" fill="#7c9186">G1/G3 = UART0 — no Serial used</text>
+          <path d="M220,610 C320,610 400,500 470,440" fill="none" stroke="#e0574a" stroke-width="1.6"/>
+
+          <!-- power rail -->
+          <path d="M60,690 L1060,690" stroke="#888" stroke-width="1.4" stroke-dasharray="3 3"/>
+          <text x="60" y="705" fill="#888" font-size="10">common ground rail — all module GNDs tie here</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:#4fc3d9"></i>nRF24 / ultrasonic (SPI &amp; digital)</span>
+        <span><i style="background:#b48be0"></i>LoRa telemetry (SPI)</span>
+        <span><i style="background:#f0c141"></i>analog gas sensors</span>
+        <span><i style="background:#5fd88a"></i>I²C sensor bus</span>
+        <span><i style="background:#e8a13a"></i>motor driver</span>
+        <span><i style="background:#e0574a"></i>power / alerts</span>
+        <span><i style="background:#888"></i>ground</span>
+      </div>
+      <p class="pinnote"><b>Notes:</b> nRF24 and LoRa share the SPI SCK/MOSI lines but use independent CS/CE pins, routed through the ESP32's GPIO matrix. GPIO6–11 (internal flash) and GPIO34/35/36/39 (input-only) are avoided for outputs. G1/G3 are UART0 — reused here for LEDs only because Serial debugging isn't used.</p>
+    </div>
+  </section>
+
+  <!-- ================= SIMULATION ================= -->
+  <section id="tab-sim">
+    <div class="simgrid">
+
+      <!-- remote controls -->
+      <div class="card">
+        <p class="panel-title">🎮 remote — live input</p>
+        <div class="joybase" id="joyBase">
+          <div class="joystick" id="joyStick"></div>
+        </div>
+        <div class="joyreadout" id="joyReadout">x: 0 &nbsp;&nbsp; y: 0</div>
+
+        <div class="btnrow">
+          <div class="ctlbtn" data-btn="up">UP</div>
+          <div class="ctlbtn" data-btn="left">LEFT</div>
+          <div class="ctlbtn" data-btn="right">RIGHT</div>
+        </div>
+        <div class="btnrow" style="grid-template-columns:1fr">
+          <div class="ctlbtn" data-btn="down">DOWN</div>
+        </div>
+        <div class="ctlbtn modebtn" data-btn="mode">MODE (joystick SW)</div>
+
+        <button class="linkbtn" id="linkKill">SEVER nRF24 LINK</button>
+        <div style="margin-top:10px;text-align:center">
+          <span class="status-badge" id="linkBadge"><span class="dot" style="background:var(--green)"></span>LINK OK — 40 pkt/s</span>
+        </div>
+      </div>
+
+      <!-- rover -->
+      <div class="card">
+        <p class="panel-title">🤖 rover — response &amp; telemetry</p>
+
+        <div class="roverstage">
+          <div class="roverview">
+            <div class="dirlabel" id="dirLabel">STOPPED</div>
+            <div class="chassis" id="chassis">
+              <div class="arrow" id="chassisArrow">■</div>
+              <div class="body"></div>
+              <div class="wheelbar">
+                <div class="wheel">L<span class="dir" id="wheelL">■</span></div>
+                <div class="wheel">R<span class="dir" id="wheelR">■</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="oled" id="oled">MUDRA ROVER
+T:--.- C H:--%
+MQ4:---- MQ7:----
+TOF:---
+US:---</div>
+        </div>
+
+        <div class="sliders">
+          <div class="sliderbox">
+            <label>MQ-4 (CH4) raw ADC — <span class="val" id="mq4val">400</span></label>
+            <input type="range" id="mq4" min="0" max="4095" value="400">
+          </div>
+          <div class="sliderbox">
+            <label>MQ-7 (CO) raw ADC — <span class="val" id="mq7val">400</span></label>
+            <input type="range" id="mq7" min="0" max="4095" value="400">
+          </div>
+          <div class="sliderbox">
+            <label>Ultrasonic distance (cm) — <span class="val" id="usval">80</span></label>
+            <input type="range" id="usSlider" min="2" max="300" value="80">
+          </div>
+          <div class="sliderbox">
+            <label>ToF distance (mm) — <span class="val" id="tofval">400</span></label>
+            <input type="range" id="tofSlider" min="0" max="2000" value="400">
+          </div>
+        </div>
+
+        <div class="alertrow">
+          <span><span class="led off" id="ledGreen"></span> green LED</span>
+          <span><span class="led off" id="ledRed"></span> red LED</span>
+          <span class="buzzer" id="buzzerTxt">🔇 buzzer idle</span>
+        </div>
+
+        <div class="telemetry">
+          <label style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">LoRa telemetry stream (1 pkt/s)</label>
+          <pre id="telemetryLog"></pre>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>reflects the pin map &amp; control logic (processRemoteCommand, updateAlerts, sendTelemetry) from the firmware above — not a substitute for hardware-in-the-loop testing.</footer>
+</div>
+
+<script>
+// ---------- tab switching ----------
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+document.querySelectorAll('.subtabs button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.subtabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('sub-remote').style.display = btn.dataset.sub==='remote' ? 'block':'none';
+    document.getElementById('sub-rover').style.display = btn.dataset.sub==='rover' ? 'block':'none';
+  });
+});
+
+// ---------- joystick ----------
+const joyBase = document.getElementById('joyBase');
+const joyStick = document.getElementById('joyStick');
+const joyReadout = document.getElementById('joyReadout');
+let joy = {x:0,y:0};
+let dragging=false;
+const RADIUS = 59;
+
+function setStick(dx,dy){
+  const dist = Math.min(RADIUS, Math.hypot(dx,dy));
+  const ang = Math.atan2(dy,dx);
+  const cx = Math.cos(ang)*dist, cy = Math.sin(ang)*dist;
+  joyStick.style.left = (59+cx)+'px';
+  joyStick.style.top = (59+cy)+'px';
+  joy.x = Math.round((cx/RADIUS)*100);
+  joy.y = Math.round((cy/RADIUS)*100);
+  joyReadout.textContent = 'x: '+joy.x+'   y: '+joy.y;
+}
+function resetStick(){ setStick(0,0); }
+joyStick.addEventListener('pointerdown',e=>{dragging=true; joyStick.setPointerCapture(e.pointerId);});
+window.addEventListener('pointerup',()=>{dragging=false; resetStick();});
+window.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const rect = joyBase.getBoundingClientRect();
+  const cx = e.clientX-rect.left-90, cy = e.clientY-rect.top-90;
+  setStick(cx,cy);
+});
+resetStick();
+
+// ---------- buttons ----------
+const btnState = {up:false,down:false,left:false,right:false,mode:false};
+document.querySelectorAll('.ctlbtn').forEach(el=>{
+  const key = el.dataset.btn;
+  const press = ()=>{btnState[key]=true; el.classList.add('active');};
+  const release = ()=>{btnState[key]=false; el.classList.remove('active');};
+  el.addEventListener('pointerdown',press);
+  el.addEventListener('pointerup',release);
+  el.addEventListener('pointerleave',release);
+});
+
+// ---------- link kill switch ----------
+let linkAlive = true;
+let lastPacketTime = Date.now();
+const linkBtn = document.getElementById('linkKill');
+const linkBadge = document.getElementById('linkBadge');
+linkBtn.addEventListener('click',()=>{
+  linkAlive = !linkAlive;
+  linkBtn.classList.toggle('killed',!linkAlive);
+  linkBtn.textContent = linkAlive ? 'SEVER nRF24 LINK' : 'RESTORE nRF24 LINK';
+});
+
+// ---------- rover motor logic (mirrors processRemoteCommand) ----------
+const chassis = document.getElementById('chassis');
+const chassisArrow = document.getElementById('chassisArrow');
+const dirLabel = document.getElementById('dirLabel');
+const wheelL = document.getElementById('wheelL');
+const wheelR = document.getElementById('wheelR');
+
+function applyMotorState(state){
+  // state: forward | backward | left | right | stop
+  let arrow='■', lw='■', rw='■', label='STOPPED', transform='translate(0,0) rotate(0deg)';
+  if(state==='forward'){arrow='▲';lw='↑';rw='↑';label='FORWARD';transform='translateY(-8px)';}
+  else if(state==='backward'){arrow='▼';lw='↓';rw='↓';label='REVERSE';transform='translateY(8px)';}
+  else if(state==='left'){arrow='◄';lw='↓';rw='↑';label='TURN LEFT';transform='rotate(-14deg)';}
+  else if(state==='right'){arrow='►';lw='↑';rw='↓';label='TURN RIGHT';transform='rotate(14deg)';}
+  chassisArrow.textContent = arrow;
+  wheelL.textContent = lw;
+  wheelR.textContent = rw;
+  dirLabel.textContent = label;
+  chassis.style.transform = transform;
+}
+
+function processRemoteCommand(){
+  if(btnState.mode){ applyMotorState('stop'); return; } // joystick SW = stop, matches firmware priority
+  if(btnState.up){ applyMotorState('forward'); return; }
+  if(btnState.down){ applyMotorState('backward'); return; }
+  if(btnState.left){ applyMotorState('left'); return; }
+  if(btnState.right){ applyMotorState('right'); return; }
+
+  const DEADZONE = 17; // scaled equivalent of firmware's 350/2048
+  const x = joy.x, y = joy.y;
+  const xActive = Math.abs(x) > DEADZONE;
+  const yActive = Math.abs(y) > DEADZONE;
+  if(!xActive && !yActive){ applyMotorState('stop'); return; }
+  if(y < -DEADZONE) applyMotorState('forward');
+  else if(y > DEADZONE) applyMotorState('backward');
+  else if(x < -DEADZONE) applyMotorState('left');
+  else if(x > DEADZONE) applyMotorState('right');
+  else applyMotorState('stop');
+}
+
+// ---------- radio failsafe (mirrors receiveRemote) ----------
+setInterval(()=>{
+  const now = Date.now();
+  if(linkAlive){
+    lastPacketTime = now;
+    processRemoteCommand();
+    linkBadge.innerHTML = '<span class="dot" style="background:var(--green)"></span>LINK OK — 40 pkt/s';
+    linkBadge.style.borderColor = 'var(--line)';
+  }
+  if(now - lastPacketTime > 500){
+    applyMotorState('stop');
+    linkBadge.innerHTML = '<span class="dot" style="background:var(--red)"></span>LINK LOST — failsafe STOP';
+    linkBadge.style.borderColor = 'var(--red)';
+  }
+},25);
+
+// ---------- sensors ----------
+const mq4 = document.getElementById('mq4'), mq7 = document.getElementById('mq7');
+const usSlider = document.getElementById('usSlider'), tofSlider = document.getElementById('tofSlider');
+const mq4val = document.getElementById('mq4val'), mq7val = document.getElementById('mq7val');
+const usval = document.getElementById('usval'), tofval = document.getElementById('tofval');
+[mq4,mq7,usSlider,tofSlider].forEach(s=>s.addEventListener('input',updateReadouts));
+function updateReadouts(){
+  mq4val.textContent = mq4.value;
+  mq7val.textContent = mq7.value;
+  usval.textContent = usSlider.value;
+  tofval.textContent = tofSlider.value;
+}
+updateReadouts();
+
+const ledGreen = document.getElementById('ledGreen');
+const ledRed = document.getElementById('ledRed');
+const buzzerTxt = document.getElementById('buzzerTxt');
+
+function updateAlerts(){
+  const danger = Number(mq4.value) > 3000 || Number(mq7.value) > 3000;
+  ledGreen.className = 'led ' + (danger ? 'off' : 'on green');
+  ledRed.className = 'led ' + (danger ? 'on red' : 'off');
+  buzzerTxt.textContent = danger ? '🔔 buzzer ON — gas threshold exceeded' : '🔇 buzzer idle';
+  buzzerTxt.className = 'buzzer' + (danger ? ' on' : '');
+}
+
+// ---------- simulated environment drift (temp/humidity/pressure/accel) ----------
+let t=0;
+function envSample(){
+  t += 0.15;
+  return {
+    temp: 28 + Math.sin(t)*1.8,
+    hum: 46 + Math.cos(t*0.7)*6,
+    pres: 1008 + Math.sin(t*0.4)*1.2,
+    ax: (Math.sin(t*1.3)*0.4).toFixed(2),
+    ay: (Math.cos(t*1.1)*0.4).toFixed(2),
+    az: (9.8+Math.sin(t*0.9)*0.15).toFixed(2)
+  };
+}
+
+// ---------- OLED (mirrors updateDisplay, every 500ms) ----------
+const oled = document.getElementById('oled');
+setInterval(()=>{
+  updateAlerts();
+  const env = envSample();
+  const tof = Number(tofSlider.value);
+  const us = Number(usSlider.value);
+  oled.textContent =
+`MUDRA ROVER
+T:${env.temp.toFixed(1)}C H:${env.hum.toFixed(0)}%
+MQ4:${mq4.value} MQ7:${mq7.value}
+TOF:${tof<2000?tof+'mm':'---'}
+US:${us>0?us+'cm':'---'}`;
+},500);
+
+// ---------- LoRa telemetry (mirrors sendTelemetry, every 1000ms) ----------
+const log = document.getElementById('telemetryLog');
+setInterval(()=>{
+  const env = envSample();
+  const line = `T=${env.temp.toFixed(1)},H=${env.hum.toFixed(1)},P=${env.pres.toFixed(1)},MQ4=${mq4.value},MQ7=${mq7.value},TOF=${tofSlider.value},US=${usSlider.value},AX=${env.ax},AY=${env.ay},AZ=${env.az}`;
+  log.textContent += line + '\n';
+  log.scrollTop = log.scrollHeight;
+},1000);
+</script>
+</body>
+</html>
